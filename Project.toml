@@ -3,7 +3,12 @@ uuid = "6d2fcacd-8802-41d3-84f5-0351f488d32a"
 authors = ["Takafumi Arakaki <aka.tkf@gmail.com> and contributors"]
 version = "0.1.0"
 
+[deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Transducers = "28d57a85-8fef-5791-bfe6-a80928e7c999"
+
 [compat]
+Transducers = "0.4.62"
 julia = "1"
 
 [extras]

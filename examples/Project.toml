@@ -1,0 +1,5 @@
+[deps]
+FLoops = "cc61a311-1640-44b5-9fba-1b764f453329"
+Folds = "41a02a25-b8f0-4f67-bc48-60067656b558"
+FoldsPreview = "6d2fcacd-8802-41d3-84f5-0351f488d32a"
+UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
