@@ -1,3 +1,34 @@
+"""
+    with_preview(f, on_preview, executor, throttle, [throttle_local]) -> result
+
+Create a `previewer` and call `f(previewer)` whose `result` is returned as-is.
+
+The `previewer` object passed to `f` is a transducer that acts like an identity
+transducer (i.e., `Map(identity)`) with respect to the final result. However,
+in another "background" task, it also calls the inner reducing function to
+combine and complete the *intermediate* result and then passed it to
+`on_preview`. The interval of calling `on_preview` can be configured by
+`throttle` and `throttle_local`. The first `throttle` controls how often each
+"worker" (a process for `DistributedEx` and a `Task` for `ThreadedEx` and
+alike) tries to share its accumulator and `throttle_local` controls how often
+the local "preview event loop" actually calls `on_preview` function.
+"""
+with_preview
+
+"""
+    with_distributed_preview(f, on_preview, throttle, [throttle_local]) -> result
+
+Equivalent to [`with_preview`](@ref) called with `DistributedEx` executor.
+"""
+with_distributed_preview
+
+"""
+    with_threaded_preview(f, on_preview, throttle, [throttle_local]) -> result
+
+Equivalent to [`with_preview`](@ref) called with `ThreadedEx` executor.
+"""
+with_threaded_preview
+
 struct BasecaseId
     pid::typeof(myid())
     lid::UInt
