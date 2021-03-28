@@ -44,7 +44,7 @@ channel_for(f, args...) = f(args...)
 channel_for(::Executor, args...) = Channel(args...)
 channel_for(::DistributedEx, args...) = remote_channel(args...)
 
-struct Preview{C,S,T <: Throttle} <: Transducer
+struct Preview{C,S,T<:Throttle} <: Transducer
     channel::C
     start_channel::S
     throttle::T
@@ -66,18 +66,21 @@ function with_preview(f, on_preview, make_channel, thw::Throttle, thp::Throttle)
     # TODO: better buffer size detection
     channel = channel_for(make_channel, Threads.nthreads() * nprocs())
     start_channel = channel_for(make_channel, 0)
+    previewer = Preview(channel, start_channel, thw)
     @sync try
-        previewer = Preview(channel, start_channel, thw)
         @async try
             preview_loop(on_preview, previewer, thp)
         catch err
             @debug "`preview_loop` task" exception = (err, catch_backtrace())
+            rethrow()
         finally
             close(channel)
+            close(start_channel)
         end
         @syncthrow f(previewer)
     finally
         close(channel)
+        close(start_channel)
     end
 end
 
@@ -108,7 +111,8 @@ function preview_loop(on_preview, previewer, th, rf, init)
         bid, a = try
             take!(channel)
         catch err
-            @debug "`preview_loop`" exception = (err, catch_backtrace())
+            @debug "`preview_loop`: on `take!(channel)`" exception =
+                (err, catch_backtrace())
             close(channel)
             return
         end

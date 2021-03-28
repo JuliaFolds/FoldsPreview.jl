@@ -1,7 +1,8 @@
 """
     @syncthrow ex
 
-Equivalent to just `ex` but let `@sync` handle throw
+Equivalent to just `ex` but let `@sync` include the exception thrown from
+`ex` to `CompositeException`.
 """
 macro syncthrow(ex)
     @gensym err
@@ -11,6 +12,7 @@ macro syncthrow(ex)
         try
             $ex
         catch $err
+            # $Base.@debug "@syncthrow" exception = ($err, catch_backtrace())
             $Base.@sync_add $Thrower($err, $catch_backtrace())
         end
     end |> esc

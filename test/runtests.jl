@@ -1,6 +1,2 @@
-using FoldsPreview
-using Test
-
-@testset "FoldsPreview.jl" begin
-    # Write your tests here.
-end
+include("load.jl")
+FoldsPreviewTests.runtests()
