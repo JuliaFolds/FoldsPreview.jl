@@ -18,6 +18,8 @@ using Transducers:
     wrapping,
     xform
 
+include("utils.jl")
+
 include("throttles.jl")
 using .Throttles: IntervalThrottle, Throttle
 

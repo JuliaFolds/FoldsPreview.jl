@@ -75,7 +75,7 @@ function with_preview(f, on_preview, make_channel, thw::Throttle, thp::Throttle)
         finally
             close(channel)
         end
-        f(previewer)
+        @syncthrow f(previewer)
     finally
         close(channel)
     end
