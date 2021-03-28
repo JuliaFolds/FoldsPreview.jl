@@ -98,7 +98,13 @@ function send_start!(start_channel, starter)
 end
 
 function preview_loop(on_preview, previewer, th)
-    rf, init = take!(previewer.start_channel)
+    rf, init = try
+        take!(previewer.start_channel)
+    catch err
+        @debug "`preview_loop`: on `take!(start_channel)`" exception =
+            (err, catch_backtrace())
+        return
+    end
     close(previewer.start_channel)
     Base.invokelatest(preview_loop, on_preview, previewer, th, rf, init)
 end
@@ -113,7 +119,6 @@ function preview_loop(on_preview, previewer, th, rf, init)
         catch err
             @debug "`preview_loop`: on `take!(channel)`" exception =
                 (err, catch_backtrace())
-            close(channel)
             return
         end
         accs[bid] = a
@@ -131,35 +136,47 @@ function preview_loop(on_preview, previewer, th, rf, init)
 end
 
 function Transducers.start(rf::R_{Preview}, init)
-    send_start!(xform(rf).start_channel, (inner(rf), init))
     iacc = start(inner(rf), init)
     bid = BasecaseId()
     tstate = Throttles.init(xform(rf).throttle)
-    return wrap(rf, (bid, tstate), iacc)
+    return wrap(rf, (bid, tstate, false, init), iacc)
 end
 
 Transducers.next(rf::R_{Preview}, acc, input) =
-    wrapping(rf, acc) do (bid, tstate), iacc
+    wrapping(rf, acc) do (bid, tstate, started, init), iacc
         iacc = next(inner(rf), iacc, input)
         go, tstate = Throttles.step(xform(rf).throttle, tstate)
         if go
+            if !started
+                send_start!(xform(rf).start_channel, (inner(rf), init))
+            end
+            started = true
             put!(xform(rf).channel, (bid, iacc))
         end
-        return (bid, tstate), iacc
+        return (bid, tstate, started, init), iacc
     end
+# Note: Postpone `send_start!` until we hit the first `go`. Otherwise, with
+# `ThreadedEx` and alike, each base case `Task` will hit the yield point right
+# after it is started. It makes the scheduler to (likely) re-use the OS thread
+# (which is very bad for performance).
 
 Transducers.complete(rf::R_{Preview}, acc) = complete(inner(rf), last(unwrap(rf, acc)))
 
 function Transducers.combine(rf::R_{Preview}, a, b)
-    (bid, tstatea), ira = unwrap(rf, a)
-    (_, tstateb), irb = unwrap(rf, b)
+    (bid, tstatea, starteda, init), ira = unwrap(rf, a)
+    (_, tstateb, startedb), irb = unwrap(rf, b)
     irc = combine(inner(rf), ira, irb)
     go, tstatea = Throttles.step(xform(rf).throttle, tstatea)
     if !go
         go, _ = Throttles.step(xform(rf).throttle, tstateb)
     end
+    started = starteda || startedb
     if go
+        if started
+            send_start!(xform(rf).start_channel, (inner(rf), init))
+        end
+        started = true
         put!(xform(rf).channel, (bid, irc))
     end
-    return wrap(rf, (bid, tstatea), irc)
+    return wrap(rf, (bid, tstatea, started, init), irc)
 end
