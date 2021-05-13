@@ -25,7 +25,7 @@ function test_early_error_in_body()
 end
 
 function test_early_error_in_on_preview(ex)
-    th = IntervalThrottle(-1)
+    th = IntervalThrottle(0)
     race = Channel{Symbol}(3) do race
         sleep(60 * 5)
         put!(race, :timeout)
