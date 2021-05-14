@@ -4,7 +4,7 @@ using UnicodePlots
 
 function online_histogram(;
     N = 100_000_000_000,
-    th = IntervalThrottle(10),
+    interval = 10,
     ex = ThreadedEx(),
     nbins = 1000,
 )
@@ -15,7 +15,7 @@ function online_histogram(;
         @show nsamples
         # @show sort(collect(tids))
     end
-    with_preview(on_preview, ex, th) do previewer
+    with_preview(on_preview, ex, interval) do previewer
         @floop ex for n in previewer(1:N)
             x = randn() * 0.3 + rand(-1:1)
             y = randn() * 0.3 + rand(-1:1)
