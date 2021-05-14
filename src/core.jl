@@ -1,5 +1,5 @@
 """
-    with_preview(f, on_preview, executor, throttle, [throttle_local]) -> result
+    with_preview(f, on_preview, executor, interval::Real, [throttle]) -> result
 
 Create a `previewer` and call `f(previewer)` whose `result` is returned as-is.
 
@@ -8,22 +8,19 @@ transducer (i.e., `Map(identity)`) with respect to the final result. However,
 in another "background" task, it also calls the inner reducing function to
 combine and complete the *intermediate* result and then passed it to
 `on_preview`. The interval of calling `on_preview` can be configured by
-`throttle` and `throttle_local`. The first `throttle` controls how often each
-"worker" (a process for `DistributedEx` and a `Task` for `ThreadedEx` and
-alike) tries to share its accumulator and `throttle_local` controls how often
-the local "preview event loop" actually calls `on_preview` function.
+`interval` and `throttle`.
 """
 with_preview
 
 """
-    with_distributed_preview(f, on_preview, throttle, [throttle_local]) -> result
+    with_distributed_preview(f, on_preview, interval, [throttle]) -> result
 
 Equivalent to [`with_preview`](@ref) called with `DistributedEx` executor.
 """
 with_distributed_preview
 
 """
-    with_threaded_preview(f, on_preview, throttle, [throttle_local]) -> result
+    with_threaded_preview(f, on_preview, interval, [throttle]) -> result
 
 Equivalent to [`with_preview`](@ref) called with `ThreadedEx` executor.
 """
@@ -50,37 +47,69 @@ struct Preview{C,S,T<:Throttle} <: Transducer
     throttle::T
 end
 
-with_distributed_preview(f, on_preview, th::Throttle) =
-    with_distributed_preview(f, on_preview, th, th)
-with_distributed_preview(f, on_preview, thw::Throttle, thp::Throttle) =
-    with_preview(f, on_preview, remote_channel, thw, thp)
+with_distributed_preview(
+    f,
+    on_preview,
+    interval::Real,
+    thw::Throttle = IntervalThrottle(interval),
+) = with_preview(f, on_preview, remote_channel, interval, thw)
 
-with_threaded_preview(f, on_preview, th::Throttle) =
-    with_threaded_preview(f, on_preview, th, th)
-with_threaded_preview(f, on_preview, thw::Throttle, thp::Throttle) =
-    with_preview(f, on_preview, Channel, thw, thp)
+with_threaded_preview(
+    f,
+    on_preview,
+    thw::Throttle,
+    interval::Real = IntervalThrottle(interval),
+) = with_preview(f, on_preview, Channel, thw, interval)
 
-with_preview(f, on_preview, make_channel, th::Throttle) =
-    with_preview(f, on_preview, make_channel, th, th)
-function with_preview(f, on_preview, make_channel, thw::Throttle, thp::Throttle)
+function with_preview(f, on_preview, make_channel, th::IntervalThrottle)
+    @warn(
+        "DEPRECATED: Please use `with_preview(f, on_preview, executor, interval)`" *
+        " instead of `with_preview(f, on_preview, executor, IntervalThrottle(interval))`",
+        maxlog = 2,
+    )
+    return with_preview(f, on_preview, make_channel, th.interval)
+end
+
+function with_preview(
+    f,
+    on_preview,
+    make_channel,
+    interval::Real,
+    thw::Throttle = IntervalThrottle(interval),
+)
+    interval >= 0 || error("`interval` must be positive; got: interval = $interval")
     # TODO: better buffer size detection
     channel = channel_for(make_channel, Threads.nthreads() * nprocs())
     start_channel = channel_for(make_channel, 0)
     previewer = Preview(channel, start_channel, thw)
+    accref = LockedRef{Any}()
+    isdone() = !isopen(channel)
     @sync try
         @async try
-            preview_loop(on_preview, previewer, thp)
+            updater_loop(accref, previewer)
+        catch err
+            @debug "`updater_loop` task" exception = (err, catch_backtrace())
+            rethrow()
+        finally
+            close(channel)
+            close(start_channel)
+            close(accref)
+        end
+        @async try
+            preview_loop(on_preview, interval, accref, isdone)
         catch err
             @debug "`preview_loop` task" exception = (err, catch_backtrace())
             rethrow()
         finally
             close(channel)
             close(start_channel)
+            close(accref)
         end
         @syncthrow f(previewer)
     finally
         close(channel)
         close(start_channel)
+        close(accref)
     end
 end
 
@@ -97,41 +126,53 @@ function send_start!(start_channel, starter)
     return
 end
 
-function preview_loop(on_preview, previewer, th)
+function preview_loop(on_preview, interval, accref, isdone)
+    acc0 = tryfetch(accref)
+    acc0 === nothing && return
+    function preview_loop_impl()
+        on_preview(something(acc0))
+        while true
+            sleep(interval)
+            isdone() && return
+            local acc = accref[]
+            acc === nothing && return
+            on_preview(something(acc))
+        end
+    end
+    Base.invokelatest(preview_loop_impl)
+end
+
+function updater_loop(accref, previewer)
     rf, init = try
         take!(previewer.start_channel)
     catch err
-        @debug "`preview_loop`: on `take!(start_channel)`" exception =
+        @debug "`updater_loop`: on `take!(start_channel)`" exception =
             (err, catch_backtrace())
         return
     end
     close(previewer.start_channel)
-    Base.invokelatest(preview_loop, on_preview, previewer, th, rf, init)
+    Base.invokelatest(updater_loop, accref, previewer, rf, init)
 end
 
-function preview_loop(on_preview, previewer, th, rf, init)
+function updater_loop(accref, previewer, rf, init)
     channel = previewer.channel
     accs = Dict{BasecaseId,Any}()
-    tstate = Throttles.init(th)
     while true
         bid, a = try
             take!(channel)
         catch err
-            @debug "`preview_loop`: on `take!(channel)`" exception =
+            @debug "`updater_loop`: on `take!(channel)`" exception =
                 (err, catch_backtrace())
             return
         end
         accs[bid] = a
-        go, tstate = Throttles.step(th, tstate)
-        # print("go = $go; tstate = $tstate; th = $th\n")
-        if go
-            it = values(accs)
-            acc = start(rf, init)
-            for x in values(accs)
-                acc = combine(rf, acc, x)
-            end
-            on_preview(complete(rf, acc))
+
+        # TODO: use monoid cached tree
+        acc = start(rf, init)
+        for x in values(accs)
+            acc = combine(rf, acc, x)
         end
+        tryset!(accref, complete(rf, acc)) || break
     end
 end
 
