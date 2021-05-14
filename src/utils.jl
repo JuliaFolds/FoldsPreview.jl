@@ -62,6 +62,14 @@ function tryfetch(ref::LockedRef)
     end
 end
 
+#=
+function Base.getindex(ref::LockedRef)
+    value = tryfetch(ref)
+    value === nothing && error("LockedRef is closed")
+    return something(value)
+end
+=#
+
 function tryset!(ref::LockedRef, value)
     lock(ref.cond) do
         state = ref.state[]
@@ -72,6 +80,11 @@ function tryset!(ref::LockedRef, value)
         return true
     end
 end
+
+#=
+Base.setindex!(ref::LockedRef, value) =
+    tryset!(ref, value) || error("LockedRef is closed")
+=#
 
 function Base.close(ref::LockedRef)
     lock(ref.cond) do
