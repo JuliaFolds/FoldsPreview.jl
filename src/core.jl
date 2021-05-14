@@ -132,9 +132,10 @@ function preview_loop(on_preview, interval, accref, isdone)
     function preview_loop_impl()
         on_preview(something(acc0))
         while true
+            # @info "`preview_loop`: Sleeping $interval seconds..."
             sleep(interval)
             isdone() && return
-            local acc = accref[]
+            local acc = tryfetch(accref)
             acc === nothing && return
             on_preview(something(acc))
         end
