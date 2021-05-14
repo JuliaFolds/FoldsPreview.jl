@@ -35,3 +35,47 @@ function Base.showerror(io::IO, t::Thrower)
     print(io, "Thrower: ")
     showerror(io, t.err, t.backtrace)
 end
+
+@enum RefState begin
+    REF_UNSET
+    REF_SET
+    REF_CLOSED
+end
+
+struct LockedRef{T}
+    ref::Base.RefValue{T}
+    state::Base.RefValue{RefState}
+    cond::Threads.Condition
+end
+
+LockedRef{T}() where {T} = LockedRef{T}(Ref{T}(), Ref(REF_UNSET), Threads.Condition())
+LockedRef(x) = LockedRef(Ref(x), Ref(REF_SET), Threads.Condition())
+
+function tryfetch(ref::LockedRef)
+    lock(ref.cond) do
+        while true
+            state = ref.state[]
+            state == REF_SET && return Some(ref.ref[])
+            state == REF_CLOSED && return nothing
+            wait(ref.cond)
+        end
+    end
+end
+
+function tryset!(ref::LockedRef, value)
+    lock(ref.cond) do
+        state = ref.state[]
+        state == REF_CLOSED && return false
+        ref.state[] = REF_SET
+        ref.ref[] = value
+        state == REF_UNSET && notify(ref.cond)
+        return true
+    end
+end
+
+function Base.close(ref::LockedRef)
+    lock(ref.cond) do
+        ref.state[] = REF_CLOSED
+        notify(ref.cond)
+    end
+end
