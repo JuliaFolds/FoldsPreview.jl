@@ -4,7 +4,7 @@ using UnicodePlots
 
 function online_extrema(;
     N = 100_000_000_000,
-    th = IntervalThrottle(10),
+    interval = 10,
     ex = ThreadedEx(),
 )
     vmin_trace = Float64[]
@@ -33,7 +33,7 @@ function online_extrema(;
         display(plt1)
         display(plt2)
     end
-    with_preview(on_preview, ex, th) do previewer
+    with_preview(on_preview, ex, interval) do previewer
         Folds.extrema(previewer(1:N), ex) do _
             randn()
         end
