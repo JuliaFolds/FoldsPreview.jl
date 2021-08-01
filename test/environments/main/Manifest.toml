@@ -117,7 +117,7 @@ uuid = "6d2fcacd-8802-41d3-84f5-0351f488d32a"
 version = "0.1.0"
 
 [[FoldsPreviewTests]]
-deps = ["Distributed", "FLoops", "Folds", "FoldsPreview", "LoadAllPackages", "Test", "Transducers", "UnicodePlots"]
+deps = ["Distributed", "FLoops", "Folds", "FoldsPreview", "Test", "Transducers", "UnicodePlots"]
 path = "../../FoldsPreviewTests"
 uuid = "289937aa-a121-4eb3-89fd-857dabee71e0"
 version = "0.1.0"
@@ -305,6 +305,14 @@ version = "1.4.2"
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[TestFunctionRunner]]
+deps = ["Distributed", "LoadAllPackages", "Pkg", "Test"]
+git-tree-sha1 = "4e314f5547d237ac8af3686200bfb2a3a36ecf14"
+repo-rev = "master"
+repo-url = "https://github.com/tkf/TestFunctionRunner.jl"
+uuid = "792026f5-ac9a-4a19-adcb-47b0ce2deb5d"
+version = "0.1.0"
 
 [[Transducers]]
 deps = ["Adapt", "ArgCheck", "BangBang", "Baselet", "CompositionsBase", "DefineSingletons", "Distributed", "InitialValues", "Logging", "Markdown", "MicroCollections", "Requires", "Setfield", "SplittablesBase", "Tables"]
