@@ -12,7 +12,8 @@ Transducers = "0.4.62"
 julia = "1.4"
 
 [extras]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Distributed", "Test"]
