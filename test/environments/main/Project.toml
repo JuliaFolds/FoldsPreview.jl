@@ -1,3 +1,4 @@
 [deps]
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 FoldsPreviewTests = "289937aa-a121-4eb3-89fd-857dabee71e0"
 TestFunctionRunner = "792026f5-ac9a-4a19-adcb-47b0ce2deb5d"
